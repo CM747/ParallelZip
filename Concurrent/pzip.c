@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/time.h>
 
 // structure for io files
 typedef struct IOfiles{
@@ -17,6 +18,11 @@ int checkfileformat(char *);
 
 
 int main(int argc, char* argv[]){
+    
+    struct timeval start;
+    struct timeval end;
+    gettimeofday(&start, NULL);
+
     // check if files are provided
     if(argc==1){
         printf("wzip: file1 [file2 ...]\n");
@@ -38,7 +44,7 @@ int main(int argc, char* argv[]){
             
             sub = malloc(l-2);
             substring(argv[i],0,l-3,sub);
-            strcat(sub, "zip");
+            strcat(sub, "pzip");
             fout[i-1] = fopen(sub, "w");
             free(sub);
 
@@ -62,7 +68,8 @@ int main(int argc, char* argv[]){
         fclose(fout[i-1]);
     }
 
-    printf("Main finished\n");
+    gettimeofday(&end, NULL);
+    printf("Main finished, Total Time Taken to zip %d files: %ld microsec\n", argc-1, (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
     
     free(threads);
     free(arg);
@@ -73,6 +80,9 @@ int main(int argc, char* argv[]){
 
 
 void *RLEzip(void *param){
+    struct timeval start;
+    struct timeval end;
+    gettimeofday(&start, NULL);
     files *iofiles = (files *)param;
     printf("Zipping: %d\n", iofiles->c);
     int count = 0;
@@ -94,7 +104,8 @@ void *RLEzip(void *param){
     fwrite(&count, sizeof(int), 1, iofiles->fout);
     fwrite(&curr, sizeof(char), 1, iofiles->fout);
 
-    printf("Zipping Completed: %d\n", iofiles->c);
+    gettimeofday(&end, NULL);
+    printf("Zipping Completed: %d, Time Taken: %ld microsec\n", iofiles->c, (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
 
     return NULL;
 }
