@@ -1,0 +1,16 @@
+Concurrent/RLE_Encoding/sample*
+Concurrent/RLE_Encoding/r*
+Concurrent/RLE_Encoding/pzip
+Concurrent/RLE_Encoding/punzip
+Concurrent/RLE_Encoding/a.out
+
+Concurrent/HuffmanEncoding/sample*
+Concurrent/HuffmanEncoding/phuffzip
+Concurrent/HuffmanEncoding/phuffuzip
+Concurrent/HuffmanEncoding/a.out
+
+Concurrent/ImageZip/image.c
+Concurrent/ImageZip/pgm.c
+Concurrent/ImageZip/pizip
+Concurrent/ImageZip/piunzip
+Concurrent/ImageZip/a.out
