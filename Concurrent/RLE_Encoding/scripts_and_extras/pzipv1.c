@@ -3,6 +3,8 @@
 #include <string.h>
 #include <pthread.h>
 #include <sys/time.h>
+#include <unistd.h>
+#include <sys/types.h>
 
 // structure for io files
 typedef struct IOfiles{
@@ -16,6 +18,36 @@ void *RLEzip(void *);
 char *substring(char *, int, int, char *);
 int checkfileformat(char *);
 
+int parseLine(char* line){
+    // This assumes that a digit will be found and the line ends in " Kb".
+    int i = strlen(line);
+    const char* p = line;
+    while (*p <'0' || *p > '9') p++;
+    line[i-3] = '\0';
+    i = atoi(p);
+    return i;
+}
+
+int getValue(){ //Note: this value is in KB!
+    // char pid[20];
+    // sprintf(pid, "%d", getpid());
+    // char *path = "/proc/";
+    // strcat(path, pid);
+    // strcat(path, "/status");
+    // printf("%s\n", path);
+    FILE* file = fopen("/proc/self/status", "r");
+    int result = -1;
+    char line[128];
+
+    while (fgets(line, 128, file) != NULL){
+        if (strncmp(line, "VmPeak:", 7) == 0){
+            result = parseLine(line);
+            break;
+        }
+    }
+    fclose(file);
+    return result;
+}
 
 int main(int argc, char* argv[]){
     
@@ -69,11 +101,12 @@ int main(int argc, char* argv[]){
     }
 
     gettimeofday(&end, NULL);
-    printf("Main finished, Total Time Taken to zip %d files: %ld microsec\n", argc-1, (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
+    printf("%ld\n", (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
     
     free(threads);
     free(arg);
 
+    // printf("Memory Used %d KB\n", getValue());
     
     return 0;
 }
@@ -84,7 +117,7 @@ void *RLEzip(void *param){
     struct timeval end;
     gettimeofday(&start, NULL);
     files *iofiles = (files *)param;
-    printf("Zipping: %d\n", iofiles->c);
+    // printf("Zipping: %d\n", iofiles->c);
     int count = 0;
     char curr;
     char c;
@@ -105,7 +138,7 @@ void *RLEzip(void *param){
     fwrite(&curr, sizeof(char), 1, iofiles->fout);
 
     gettimeofday(&end, NULL);
-    printf("Zipping Completed: %d, Time Taken: %ld microsec\n", iofiles->c, (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
+    // printf("Zipping Completed: %d, Time Taken: %ld microsec\n", iofiles->c, (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
 
     return NULL;
 }

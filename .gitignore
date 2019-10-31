@@ -3,6 +3,7 @@ Concurrent/RLE_Encoding/r*
 Concurrent/RLE_Encoding/pzip
 Concurrent/RLE_Encoding/punzip
 Concurrent/RLE_Encoding/a.out
+Concurrent/RLE_Encoding/graphs
 
 Concurrent/HuffmanEncoding/sample*
 Concurrent/HuffmanEncoding/phuffzip
@@ -14,3 +15,4 @@ Concurrent/ImageZip/pgm.c
 Concurrent/ImageZip/pizip
 Concurrent/ImageZip/piunzip
 Concurrent/ImageZip/a.out
+Concurrent/ImageZip/TestFiles
