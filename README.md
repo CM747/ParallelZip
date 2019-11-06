@@ -2,12 +2,12 @@
 
 The aim of this project is to build a parrallelized version of non concurrent zip, in order to reduce the time taken to zip multiple files.
 
-First we build a parallel zip that uses Run Length Encoding(RLE) algorithm for text files. We optimized our code for time taken and memory usage and went from v1 to v3 (v3 being the best).
+First we build a parallel zip that uses Run Length Encoding(RLE) algorithm for text files. We optimized our code for time taken and memory usage and went from v1 to v4 (v4 being the best).
 
 Then we also build another parallel zipping zip for text files that uses Huffman encoding as the zipping algorithm.
 At last we designed a parallel zip for image files. It uses RLE algoritm to compresss grayscale images.
 
-## RLE Zip: The 3 versions explained
+## RLE Zip: The 4 versions explained
 ### Version 1
 	Number of threads = Number of Files
 	Files are being opened serially, and then file pointers are send to the threads. So there is no IO inside threads.
@@ -50,7 +50,7 @@ Below graph shows time reduction from v3(blue line) to v4(green line) as number 
 ![](/Concurrent/RLE_Encoding/graphs/v3vsv4_time.png)
 
 
-## Non-Concurrent Zip Vs RLE Zip v3
+## Non-Concurrent Zip Vs Parallel Zip
 
 Time vs number of files (Simple Zip: Green; Parallel Zip: Blue)
 ![](/Concurrent/RLE_Encoding/graphs/nonConcurrent_vs_v3_time.png)
