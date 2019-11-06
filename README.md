@@ -2,11 +2,8 @@
 
 The aim of this project is to build a parrallelized version of non concurrent zip, in order to reduce the time taken to zip multiple files.
 
-<<<<<<< HEAD
-First we build a parallel zip that uses Run Length Encoding(RLE) algorithm for text files. We optimized our code for time taken and memory usage and went from v1 to v4 (v4 being the best).
-=======
 First we build a parallel zip that uses Run Length Encoding(RLE) algorithm for text files. We optimized our code for time taken and memory usage and went from v1 to v3 (v3 being the best).
->>>>>>> 0afa3dee36bf073b7bd8a10b19f69b8646cfb6e5
+
 Then we also build another parallel zipping zip for text files that uses Huffman encoding as the zipping algorithm.
 At last we designed a parallel zip for image files. It uses RLE algoritm to compresss grayscale images.
 
@@ -34,19 +31,16 @@ From the graph we can see that as the number of threads is increased beyond some
 ### Version 3
 	Number of threads = 15
 	Files are opened inside of threads. So IO inside threads.
-<<<<<<< HEAD
 	Files is assigned to threads in a FIFO fashion.
 
 FIFO means that after 15 files are assigned to the 15 threads, the 16th file can only be assignesd to the first thread.
-=======
->>>>>>> 0afa3dee36bf073b7bd8a10b19f69b8646cfb6e5
 
 Below graph shows the memory usage(in KB) vs number of files(version 2(green) and version 3(blue))
 ![](/Concurrent/RLE_Encoding/graphs/v2vsv3_mem.png)
 
 From the graph we can see that after 15 threads memory usage of version 3 is almost constant, while that of version 2 increases.
 
-<<<<<<< HEAD
+
 ### Version 4
 	Number of threads = 15
 	Files are opened inside of threads. So IO inside threads.
@@ -56,8 +50,6 @@ Below graph shows time reduction from v3(blue line) to v4(green line) as number 
 ![](/Concurrent/RLE_Encoding/graphs/v3vsv4_time.png)
 
 
-=======
->>>>>>> 0afa3dee36bf073b7bd8a10b19f69b8646cfb6e5
 ## Non-Concurrent Zip Vs RLE Zip v3
 
 Time vs number of files (Simple Zip: Green; Parallel Zip: Blue)
