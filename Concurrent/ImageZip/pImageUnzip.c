@@ -17,105 +17,152 @@ void *RLEunzip(void *);
 char *substring(char *, int, int, char *);
 int checkfileformat(char *);
 
+int parseLine(char* line){
+    // This assumes that a digit will be found and the line ends in " Kb".
+    int i = strlen(line);
+    const char* p = line;
+    while (*p <'0' || *p > '9') p++;
+    line[i-3] = '\0';
+    i = atoi(p);
+    return i;
+}
+
+int getValue(){ //Note: this value is in KB!
+    FILE* file = fopen("/proc/self/status", "r");
+    int result = -1;
+    char line[128];
+
+    while (fgets(line, 128, file) != NULL){
+        if (strncmp(line, "VmPeak:", 7) == 0){
+            result = parseLine(line);
+            break;
+        }
+    }
+    fclose(file);
+    return result;
+}
 
 int main(int argc, char* argv[]){
     
     struct timeval start;
     struct timeval end;
     gettimeofday(&start, NULL);
-
+    // check if files are provided
     if(argc==1){
-        printf("wunzip: file1 [file2 ...]\n");
+        printf("wzip: file1 [file2 ...]\n");
         return 1;
     }
 
-    // Allocate Space for argc threads and their parameters, input and output files
-    pthread_t *threads = (pthread_t *)malloc((argc-1) * sizeof(pthread_t));
-    files *arg = (files *)malloc((argc-1) * sizeof(files));
-    FILE **fp = (FILE **)malloc((argc-1) * sizeof(FILE *));
-    FILE **fout = (FILE **)malloc((argc-1) * sizeof(FILE *));
-    int l;
-    char* sub;
-    for(int i=1; i<argc; i++){
-        if(checkfileformat(argv[i])){
-            l = strlen(argv[i]);
-            fp[i-1] = fopen(argv[i], "r");
-            
-            sub = malloc(l-3);
-            substring(argv[i],0,l-4,sub);
-            strcat(sub, "pgm");
-            fout[i-1] = fopen(sub, "w");
-            free(sub);
 
-            arg[i-1].fin = fp[i-1];
-            arg[i-1].fout = fout[i-1];
-            arg[i-1].c = i;
-
-            // RLEunzip((void *)&arg[i-1]);
-            pthread_create(&threads[i-1], NULL, RLEunzip, (void *)&arg[i-1]);
-
-            // fclose(fp[i-1]);
-            // fclose(fout[i-1]);
+    int N = 15;
+    if(argc>N){
+        pthread_t *threads = (pthread_t *)malloc(N * sizeof(pthread_t));
+        int count = 1;
+        for(int i=0; i<N; i++){
+            if(checkfileformat(argv[count])){                                            // file in the correct format
+                pthread_create(&threads[i], NULL, RLEunzip, (void *)argv[count]);        // create the threads
+            }else{
+                printf("%s not in correct format. Could not convert\n", argv[count]);
+            }
+            count++;
         }
-        else{
-            printf("%s not in correct format. Could not convert\n", argv[i]);
-        }
-    }
 
-    for(int i=1; i<argc; i++){
-        pthread_join(threads[i-1], (void**)NULL);
-        // printf("completed %d\n", i);
-        fclose(fp[i-1]);
-        fclose(fout[i-1]);
+        int turn = 0;
+        while(count<argc){
+            pthread_join(threads[turn], (void**)NULL);
+            if(checkfileformat(argv[count])){
+                pthread_create(&threads[turn], NULL, RLEunzip, (void *)argv[count]);
+            }else{
+                printf("%s not in correct format. Could not convert\n", argv[count]);
+            }
+            count++;
+            turn = (turn+1)%N;
+        }
+        // wait for all thread to join
+        for(int i=0; i<N; i++){
+            pthread_join(threads[i], (void**)NULL);
+        }
+        free(threads);
+
+    }else{
+        // Allocate Space for argc threads and their parameters, input and output files
+        pthread_t *threads = (pthread_t *)malloc((argc-1) * sizeof(pthread_t));
+        for(int i=1; i<argc; i++){
+            // Check file format and then proceed
+            if(checkfileformat(argv[i])){
+                pthread_create(&threads[i-1], NULL, RLEunzip, (void *)argv[i]);
+            }
+            else{
+                printf("%s not in correct format. Could not convert\n", argv[i]);
+            }
+        }
+
+        for(int i=1; i<argc; i++){
+            pthread_join(threads[i-1], (void**)NULL);
+        }
+        free(threads);
     }
 
     gettimeofday(&end, NULL);
     printf("Main finished, Total Time Taken to zip %d files: %ld microsec\n", argc-1, (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
-
-    free(threads);
-    free(arg);
-        
+    // print the total time required for the to execute
+    
     return 0;
 }
 
+// thread for unzipping
 void *RLEunzip(void *param){
-    struct timeval start;
-    struct timeval end;
-    gettimeofday(&start, NULL);
-    files *iofiles = (files *)param;
-    printf("UnZipping: %d\n", iofiles->c);
+    
+    char *filename = (char *)param;
+    int l = strlen(filename);              // making file and naming it
+    FILE *fin = fopen(filename, "r");
+    char *sub = malloc(l-3);
+    substring(filename,0,l-4,sub);
+    strcat(sub, "pgm");
+    FILE *fout = fopen(sub, "w");
+    free(sub);
+
     char curr;
     int count, row, col;
     
-    fread(&col, sizeof(int), 1, iofiles->fin);
-    fread(&row, sizeof(int), 1, iofiles->fin);
-    fprintf(iofiles->fout, "P2\n%d %d\n255\n", col, row);
+    if(fread(&col, sizeof(int), 1, fin)==0){
+        exit(1);
+    }
+    if(fread(&row, sizeof(int), 1, fin)==0){
+        exit(1);
+    }
+    fprintf(fout, "P2\n%d %d\n255\n", col, row);
 
-
+    // reading row wise
     int c, c1;
     for(int i=0; i<row; i++){
         c = 0;
         while(c<col){
-            fread(&count, sizeof(int), 1, iofiles->fin);
-            fread(&curr, sizeof(char), 1, iofiles->fin);
+            if(fread(&count, sizeof(int), 1, fin)==0){
+                exit(1);
+            }
+            if(fread(&curr, sizeof(char), 1, fin)==0){
+                exit(1);
+            }
             c += count;
-            c1 = (int)curr;
-            if(c1<0){
+            c1 = (int)curr;                  // changing character to ascii value
+            if(c1<0){                                       
                 c1 = 256+c1;
             }
             for(int j=0; j<count; j++){
-                fprintf(iofiles->fout, "%d ", c1);
+                fprintf(fout, "%d ", c1);
             }
         }
-        fprintf(iofiles->fout, "\n");
+        fprintf(fout, "\n");
     }
     
-    gettimeofday(&end, NULL);
-    printf("UnZipping Completed: %d, Time Taken: %ld microsec\n", iofiles->c, (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
+    fclose(fin);
+    fclose(fout);
 
     return NULL;
 }
 
+// function to make sunstring 
 char *substring(char *string, int position, int length, char *pointer){
     int c;
     if (pointer == NULL)
@@ -131,6 +178,7 @@ char *substring(char *string, int position, int length, char *pointer){
     return pointer;
 }
 
+// function to check fileformat
 int checkfileformat(char *s){
     int l = strlen(s);
     char *sub;

@@ -64,6 +64,30 @@ char *substring(char *, int , int, char *);
 int checkfileformat(char *);
 
 
+int parseLine(char* line){
+    // This assumes that a digit will be found and the line ends in " Kb".
+    int i = strlen(line);
+    const char* p = line;
+    while (*p <'0' || *p > '9') p++;
+    line[i-3] = '\0';
+    i = atoi(p);
+    return i;
+}
+
+int getValue(){ //Note: this value is in KB!
+    FILE* file = fopen("/proc/self/status", "r");
+    int result = -1;
+    char line[128];
+
+    while (fgets(line, 128, file) != NULL){
+        if (strncmp(line, "VmPeak:", 7) == 0){
+            result = parseLine(line);
+            break;
+        }
+    }
+    fclose(file);
+    return result;
+}
 
 
 
@@ -71,76 +95,84 @@ int main(int argc, char* argv[]){
     struct timeval start;
     struct timeval end;
     gettimeofday(&start, NULL);
-
     // check if files are provided
     if(argc==1){
         printf("wzip: file1 [file2 ...]\n");
         return 1;
     }
 
-    // Allocate Space for argc threads and their parameters, input and output files
-    pthread_t *threads = (pthread_t *)malloc((argc-1) * sizeof(pthread_t));
-    files *arg = (files *)malloc((argc-1) * sizeof(files));
-    FILE **fp = (FILE **)malloc((argc-1) * sizeof(FILE *));
-    FILE **fout = (FILE **)malloc((argc-1) * sizeof(FILE *));
-	FILE **encode = (FILE **)malloc((argc-1) * sizeof(FILE *));
-    int l;
-    char* sub;
-    for(int i=1; i<argc; i++){
-        // Check file format and then proceed
-        if(checkfileformat(argv[i])){
-            l = strlen(argv[i]);
-            fp[i-1] = fopen(argv[i], "r");
-            
-            sub = malloc(l-3);
-            substring(argv[i],0,l-4,sub);
-            strcat(sub, "fff");
-            fout[i-1] = fopen(sub, "w");
-            free(sub);
-			sub = malloc(l-3);
-            substring(argv[i],0,l-4,sub);
-            strcat(sub, "encd");
-            encode[i-1] = fopen(sub, "r");
-            free(sub);
 
-            arg[i-1].fin = fp[i-1];
-            arg[i-1].fout = fout[i-1];
-			arg[i-1].encode = encode[i-1];
-            arg[i-1].c = i;
-
-            // RLEzip(fp, fout);
-            pthread_create(&threads[i-1], NULL, mainHuffmanDecode, (void *)&arg[i-1]);
-
+    int N = 15;
+    if(argc>N){
+        pthread_t *threads = (pthread_t *)malloc(N * sizeof(pthread_t));
+        int count = 1;
+        for(int i=0; i<N; i++){
+            if(checkfileformat(argv[count])){
+                pthread_create(&threads[i], NULL, mainHuffmanDecode, (void *)argv[count]);
+            }else{
+                printf("%s not in correct format. Could not convert\n", argv[count]);
+            }
+            count++;
         }
-        else{
-            printf("%s not in correct format. Could not convert\n", argv[i]);
+
+        int turn = 0;
+        while(count<argc){
+            pthread_join(threads[turn], (void**)NULL);
+            if(checkfileformat(argv[count])){
+                pthread_create(&threads[turn], NULL, mainHuffmanDecode, (void *)argv[count]);
+            }else{
+                printf("%s not in correct format. Could not convert\n", argv[count]);
+            }
+            count++;
+            turn = (turn+1)%N;
         }
+        for(int i=0; i<N; i++){
+            pthread_join(threads[i], (void**)NULL);
+        }
+        free(threads);
+
+    }else{
+        // Allocate Space for argc threads and their parameters, input and output files
+        pthread_t *threads = (pthread_t *)malloc((argc-1) * sizeof(pthread_t));
+        for(int i=1; i<argc; i++){
+            // Check file format and then proceed
+            if(checkfileformat(argv[i])){
+                pthread_create(&threads[i-1], NULL, mainHuffmanDecode, (void *)argv[i]);
+            }
+            else{
+                printf("%s not in correct format. Could not convert\n", argv[i]);
+            }
+        }
+
+        for(int i=1; i<argc; i++){
+            pthread_join(threads[i-1], (void**)NULL); //wait for threads to join
+        }
+        free(threads);
     }
 
-    for(int i=1; i<argc; i++){
-        pthread_join(threads[i-1], (void**)NULL);
-        printf("completed %d\n", i);
-        fclose(fp[i-1]);
-        fclose(fout[i-1]);
-		fclose(encode[i-1]);
-    }
-
-    gettimeofday(&end, NULL);
+    gettimeofday(&end, NULL); // print the time for the main to commplete
     printf("Main finished, Total Time Taken to zip %d files: %ld microsec\n", argc-1, (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
-    
-    free(threads);
-    free(arg);
 
-    
     return 0;
 }
 
+// create the thread for decoding
+
 void *mainHuffmanDecode(void* param) { 
-	struct timeval start;
-    struct timeval end;
-    gettimeofday(&start, NULL);
-    files *iofiles = (files *)param;
-    printf("Unzipping: %d\n", iofiles->c);
+    
+	char *filename = (char *)param;
+    int l = strlen(filename);
+	FILE *fin = fopen(filename, "r");
+	char *sub = malloc(l-3);
+	substring(filename,0,l-4,sub); //change the filename to appropriate format
+	strcat(sub, "fff");
+	FILE *fout = fopen(sub, "w");
+	free(sub);
+	sub = malloc(l-3);
+	substring(filename,0,l-4,sub);
+	strcat(sub, "encd");
+	FILE *encode = fopen(sub, "r");
+	free(sub);
 
 	struct globalvars gvars;
 	gvars.gi = 0;
@@ -150,37 +182,39 @@ void *mainHuffmanDecode(void* param) {
 
 	int i,j;
 	
-	fread(&gvars.gsize,sizeof(int),1,iofiles->encode);
-	fread(&gvars.length,sizeof(int),1,iofiles->encode);
+	fread(&gvars.gsize,sizeof(int),1,encode); // get the value required to build huffman tree
+	fread(&gvars.length,sizeof(int),1,encode);
 	char arr[gvars.gsize];
 	int freq[gvars.gsize];
-	fread(&arr,sizeof(char),gvars.gsize,iofiles->encode);
-	fread(&freq,sizeof(int),gvars.gsize,iofiles->encode);
+	fread(&arr,sizeof(char),gvars.gsize,encode);
+	fread(&freq,sizeof(int),gvars.gsize,encode);
 	gvars.gchar=(char *)malloc(gvars.gsize*sizeof(char));
 	gvars.gb=(char **)malloc(gvars.gsize*sizeof(char *));
 	for(i=0;i<gvars.gsize;i++){
 		gvars.gb[i]=(char *)malloc(100*sizeof(char));
 	}
 
-	HuffmanCodes(arr, freq, gvars.gsize, &gvars);
+	HuffmanCodes(arr, freq, gvars.gsize, &gvars); //build the huffman code
 
 	while(gvars.r<=gvars.length){
-		gvars.buffer[gvars.btop]=(char)	(readBit(iofiles->fin, &gvars)+48);
+		gvars.buffer[gvars.btop]=(char)	(readBit(fin, &gvars)+48); //read the file bit by bit
 		(gvars.btop)++;
 		j=match(&gvars);
 		if(j!=-1){
-			fwrite(&gvars.gchar[j],sizeof(char),1,iofiles->fout);
+			fwrite(&gvars.gchar[j],sizeof(char),1,fout);
 			gvars.btop=0;
 		}
 	}
 	gvars.cnt=0;
 	
-	gettimeofday(&end, NULL);
-    printf("Unzipping Completed: %d, Time Taken: %ld microsec\n", iofiles->c, (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
+
+	fclose(fin);
+    fclose(fout);
 
 	return NULL;
 }
 
+// function to a new node 
 struct MinHeapNode* newNode(char data, unsigned freq) { 
 	struct MinHeapNode* temp = (struct MinHeapNode*)malloc(sizeof(struct MinHeapNode)); 
 	temp->left = temp->right = NULL; 
@@ -189,6 +223,7 @@ struct MinHeapNode* newNode(char data, unsigned freq) {
 	return temp; 
 } 
 
+// function create a minheap
 struct MinHeap* createMinHeap(unsigned capacity) { 
 	struct MinHeap* minHeap = (struct MinHeap*)malloc(sizeof(struct MinHeap)); 
 	minHeap->size = 0; 
@@ -197,12 +232,14 @@ struct MinHeap* createMinHeap(unsigned capacity) {
 	return minHeap; 
 } 
 
+// function to swap two nodes
 void swapMinHeapNode(struct MinHeapNode** a, struct MinHeapNode** b) { 
 	struct MinHeapNode* t = *a; 
 	*a = *b; 
 	*b = t; 
 } 
 
+// function to heapify
 void minHeapify(struct MinHeap* minHeap, int idx) { 
 	int smallest = idx; 
 	int left = 2 * idx + 1; 
@@ -217,10 +254,12 @@ void minHeapify(struct MinHeap* minHeap, int idx) {
 	} 
 } 
 
+// function to check the size
 int isSizeOne(struct MinHeap* minHeap) { 
 	return (minHeap->size == 1); 
 } 
 
+// function to extract the minimum value
 struct MinHeapNode* extractMin(struct MinHeap* minHeap) { 
 
 	struct MinHeapNode* temp = minHeap->array[0]; 
@@ -230,6 +269,7 @@ struct MinHeapNode* extractMin(struct MinHeap* minHeap) {
 	return temp; 
 } 
 
+// function to insert a new node to minheap
 void insertMinHeap(struct MinHeap* minHeap, struct MinHeapNode* minHeapNode){ 
 	++minHeap->size; 
 	int i = minHeap->size - 1; 
@@ -240,6 +280,7 @@ void insertMinHeap(struct MinHeap* minHeap, struct MinHeapNode* minHeapNode){
 	minHeap->array[i] = minHeapNode; 
 } 
 
+// function to build a minheap
 void buildMinHeap(struct MinHeap* minHeap) { 
 	int n = minHeap->size - 1; 
 	int i; 
@@ -247,10 +288,10 @@ void buildMinHeap(struct MinHeap* minHeap) {
 		minHeapify(minHeap, i); 
 } 
 
+// function to print array of size n
 void printArr(int arr[], int n, struct globalvars *gvars) { 
 	int i;
 	for (i = 0; i < n; ++i) {
-		// printf("%d", arr[i]);
 		if(arr[i]==0){
 			gvars->gb[gvars->gi][i]='0';
 		}
@@ -259,13 +300,15 @@ void printArr(int arr[], int n, struct globalvars *gvars) {
 		}
 	}
 	gvars->gb[gvars->gi][i]='\0';
-	// printf("\n"); 
+
 } 
  
+// function to check if the node is the leaf 
 int isLeaf(struct MinHeapNode* root) { 
 	return !(root->left) && !(root->right); 
 } 
 
+// Creates a min heap of capacity equal to size and inserts all character of data[] in min heap. Initially size of min heap is equal to capacity 
 struct MinHeap* createAndBuildMinHeap(char data[], int freq[], int size) { 
 	struct MinHeap* minHeap = createMinHeap(size); 
 	for (int i = 0; i < size; ++i) 
@@ -275,6 +318,7 @@ struct MinHeap* createAndBuildMinHeap(char data[], int freq[], int size) {
 	return minHeap; 
 } 
 
+// The main function that builds Huffman tree 
 struct MinHeapNode* buildHuffmanTree(char data[], int freq[], int size) { 
 	struct MinHeapNode *left, *right, *top; 
 	struct MinHeap* minHeap = createAndBuildMinHeap(data, freq, size); 
@@ -294,6 +338,7 @@ struct MinHeapNode* buildHuffmanTree(char data[], int freq[], int size) {
 	return extractMin(minHeap); 
 } 
 
+// Prints huffman codes from the root of Huffman Tree. It uses arr[] to store codes 
 void printCodes(struct MinHeapNode* root, int arr[], int top, struct globalvars *gvars) {  
 	if (root->left) {
 		arr[top] = 0; 
@@ -311,12 +356,14 @@ void printCodes(struct MinHeapNode* root, int arr[], int top, struct globalvars 
 	} 
 }
 
+// The main function that builds a Huffman Tree and print codes by traversing the built Huffman Tree 
 void HuffmanCodes(char data[], int freq[], int size, struct globalvars *gvars) {  
 	struct MinHeapNode* root = buildHuffmanTree(data, freq, size); 
 	int arr[MAX_TREE_HT], top = 0; 
 	printCodes(root, arr, top, gvars); 
 } 
 
+// function to read a bit from the file
 int readBit(FILE *f, struct globalvars *gvars){	
 	char t;
 	int k;
@@ -328,7 +375,6 @@ int readBit(FILE *f, struct globalvars *gvars){
 	gvars->cnt++;
 	gvars->r++;
 	k=((gvars->temp & (t<<(8-(gvars->cnt))))>>(8-(gvars->cnt)));
-	// printf("%d",k);
 	return(k);
 }
 

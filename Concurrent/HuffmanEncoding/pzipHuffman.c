@@ -6,13 +6,32 @@
 
 #define MAX_TREE_HT 100 
 
-// structure for io files
-typedef struct IOfiles{
-    FILE *fin;
-    FILE *fout;
-	FILE *encode;
-    int c;
-}files;
+
+
+int parseLine(char* line){
+    // This assumes that a digit will be found and the line ends in " Kb".
+    int i = strlen(line);
+    const char* p = line;
+    while (*p <'0' || *p > '9') p++;
+    line[i-3] = '\0';
+    i = atoi(p);
+    return i;
+}
+
+int getValue(){ //Note: this value is in KB!
+    FILE* file = fopen("/proc/self/status", "r");
+    int result = -1;
+    char line[128];
+
+    while (fgets(line, 128, file) != NULL){
+        if (strncmp(line, "VmPeak:", 7) == 0){
+            result = parseLine(line);
+            break;
+        }
+    }
+    fclose(file);
+    return result;
+}
 
 // A Huffman tree node 
 struct MinHeapNode { 
@@ -46,7 +65,6 @@ struct globalvars
 };
 
 // Method Declarations
-void *RLEzip(void *);
 void *mainHuffman(void* );
 char *substring(char *, int, int, char *);
 int checkfileformat(char *);
@@ -79,92 +97,103 @@ int main(int argc, char* argv[]){
         return 1;
     }
 
-    // Allocate Space for argc threads and their parameters, input and output files
-    pthread_t *threads = (pthread_t *)malloc((argc-1) * sizeof(pthread_t));
-    files *arg = (files *)malloc((argc-1) * sizeof(files));
-    FILE **fp = (FILE **)malloc((argc-1) * sizeof(FILE *));
-    FILE **fout = (FILE **)malloc((argc-1) * sizeof(FILE *));
-	FILE **encode = (FILE **)malloc((argc-1) * sizeof(FILE *));
-    int l;
-    char* sub;
-    for(int i=1; i<argc; i++){
-        // Check file format and then proceed
-        if(checkfileformat(argv[i])){
-            l = strlen(argv[i]);
-            fp[i-1] = fopen(argv[i], "r");
-            
-            sub = malloc(l-2);
-            substring(argv[i],0,l-3,sub);
-            strcat(sub, "pzip");
-            fout[i-1] = fopen(sub, "wb");
-            free(sub);
-			sub = malloc(l-2);
-            substring(argv[i],0,l-3,sub);
-            strcat(sub, "encd");
-            encode[i-1] = fopen(sub, "w");
-            free(sub);
 
-            arg[i-1].fin = fp[i-1];
-            arg[i-1].fout = fout[i-1];
-			arg[i-1].encode = encode[i-1];
-            arg[i-1].c = i;
-
-            // RLEzip(fp, fout);
-            pthread_create(&threads[i-1], NULL, mainHuffman, (void *)&arg[i-1]);
-
+    int N = 15;
+    if(argc>N){
+        pthread_t *threads = (pthread_t *)malloc(N * sizeof(pthread_t));
+        int count = 1;
+        for(int i=0; i<N; i++){
+            if(checkfileformat(argv[count])){
+                pthread_create(&threads[i], NULL, mainHuffman, (void *)argv[count]);
+            }else{
+                printf("%s not in correct format. Could not convert\n", argv[count]);
+            }
+            count++;
         }
-        else{
-            printf("%s not in correct format. Could not convert\n", argv[i]);
-        }
-    }
 
-    for(int i=1; i<argc; i++){
-        pthread_join(threads[i-1], (void**)NULL);
-        // printf("completed %d\n", i);
-        fclose(fp[i-1]);
-        fclose(fout[i-1]);
-		fclose(encode[i-1]);
+        int turn = 0;
+        while(count<argc){
+            pthread_join(threads[turn], (void**)NULL);
+            if(checkfileformat(argv[count])){
+                pthread_create(&threads[turn], NULL, mainHuffman, (void *)argv[count]);
+            }else{
+                printf("%s not in correct format. Could not convert\n", argv[count]);
+            }
+            count++;
+            turn = (turn+1)%N;
+        }
+        for(int i=0; i<N; i++){
+            pthread_join(threads[i], (void**)NULL);
+        }
+        free(threads);
+
+    }else{
+        // Allocate Space for argc threads and their parameters, input and output files
+        pthread_t *threads = (pthread_t *)malloc((argc-1) * sizeof(pthread_t));
+        for(int i=1; i<argc; i++){
+            // Check file format and then proceed
+            if(checkfileformat(argv[i])){
+                pthread_create(&threads[i-1], NULL, mainHuffman, (void *)argv[i]); //file in correct format
+            }
+            else{
+                printf("%s not in correct format. Could not convert\n", argv[i]); //file in wrong format
+            }
+        }
+
+        for(int i=1; i<argc; i++){
+            pthread_join(threads[i-1], (void**)NULL); 
+        }
+        free(threads); //free memory allocated for threads
     }
 
     gettimeofday(&end, NULL);
     printf("Main finished, Total Time Taken to zip %d files: %ld microsec\n", argc-1, (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
-    
-    free(threads);
-    free(arg);
-
+    // printing the total time required for the main to execute
     
     return 0;
 }
 
 
-void *mainHuffman(void* param) 
+void *mainHuffman(void* param) //create the thread for encoding the file 
 {
-	struct timeval start;
-    struct timeval end;
-    gettimeofday(&start, NULL);
-    files *iofiles = (files *)param;
-    printf("Zipping: %d\n", iofiles->c);
+
+    char *filename = (char *)param;
+    int l = strlen(filename);
+    FILE *fin = fopen(filename, "r");
+    char *sub = malloc(l-2);  //naming the file to appropiate format
+    substring(filename,0,l-3,sub);
+    strcat(sub, "pzip"); 
+    FILE *fout = fopen(sub, "w");
+    free(sub);
+    sub = malloc(l-2);
+    substring(filename,0,l-3,sub);
+    strcat(sub, "encd");
+    FILE *encode = fopen(sub, "w");
+    free(sub);
+
 
 	struct globalvars gvars;
 	gvars.gi = 0;
 
 	char m;
-	int b[128],i,t=0,k,h;
+	int b[128],i,t=0,k,h; //making a hash for each of the ascii character
 	for(i=0;i<128;i++){
 		b[i]=0;
 	}
 	
-	m=getc(iofiles->fin);
+
+	// runnning first time for finding the number of characters and count of each ascii character 
+	m=getc(fin);
 	while(m!=EOF){
 		b[(int) m]+=1;
 		if(b[(int) m]==1){
 			t++;
 		}
-		m=getc(iofiles->fin);
+		m=getc(fin);
 	}
-	gvars.gsize=t;
-	gvars.gchar=(char *)malloc(t*sizeof(char));
-	gvars.gb=(char **)malloc(t*sizeof(char *));
+	gvars.gsize=t; //number of distinct characters in the file
+	gvars.gchar=(char *)malloc(t*sizeof(char));  // array for the all the character in the file
+	gvars.gb=(char **)malloc(t*sizeof(char *));  // 2-d array with encoding of each characterin the row
 	for(i=0;i<t;i++){
 		gvars.gb[i]=(char *)malloc(100*sizeof(char));
 	}
@@ -178,42 +207,37 @@ void *mainHuffman(void* param)
 			t=t+1;
 		}
 	}
-	int size = sizeof(arr) / sizeof(arr[0]); 
-	HuffmanCodes(arr, freq, size, &gvars);
-	rewind(iofiles->fin);
+	int size = sizeof(arr) / sizeof(arr[0]); // number of elements in the arr
+	HuffmanCodes(arr, freq, size, &gvars); // build the huffman coding
+	rewind(fin);
 
-	
-	// for(k=0;k<gvars.gsize;k++){
-	// 	printf("%c :",gvars.gchar[k]);
-	// 	printf("%s\n",gvars.gb[k]);
-	// }
-	
-	m=getc(iofiles->fin);
+	//read the file from starting to store the encoding
+
+	m=getc(fin);
 	while(m!=EOF){
 		for(k=0;k<gvars.gsize;k++){
 			if(gvars.gchar[k]==m){
 				h=0;
 				while(gvars.gb[k][h] !='\0'){
-					writeBit(((int) gvars.gb[k][h] -48), iofiles->fout, &gvars);
-					// printf("%c",gvars.gb[k][h]);
+					writeBit(((int) gvars.gb[k][h] -48), fout, &gvars); //write bit in in the file
 					h++;
 				}
 				break;
 			}
 		}
-		m=getc(iofiles->fin);
+		m=getc(fin);
 	}
 	if(gvars.cnt!=0){
-		fwrite(&gvars.byte,sizeof(char),1, iofiles->fout);
+		fwrite(&gvars.byte,sizeof(char),1, fout);
 	}
 	
-	fwrite(&gvars.gsize,sizeof(int),1,iofiles->encode);
-	fwrite(&gvars.length,sizeof(int),1,iofiles->encode);
-	fwrite(&arr,sizeof(char),gvars.gsize,iofiles->encode);
-	fwrite(&freq,sizeof(int),gvars.gsize,iofiles->encode);
+	fwrite(&gvars.gsize,sizeof(int),1,encode); // write the number of elements, length of file encoded by huffman encoding
+	fwrite(&gvars.length,sizeof(int),1,encode);
+	fwrite(&arr,sizeof(char),gvars.gsize,encode);
+	fwrite(&freq,sizeof(int),gvars.gsize,encode);
 
-	gettimeofday(&end, NULL);
-    printf("Zipping Completed: %d, Time Taken: %ld microsec\n", iofiles->c, (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec));
+	fclose(fin);
+    fclose(fout);
 
 	return NULL;
 }
@@ -312,7 +336,6 @@ void printArr(int arr[], int n, struct globalvars *gvars)
 { 
 	int i;
 	for (i = 0; i < n; ++i) {
-		// printf("%d", arr[i]);
 		if(arr[i]==0){
 			gvars->gb[gvars->gi][i]='0';
 		}
@@ -321,7 +344,6 @@ void printArr(int arr[], int n, struct globalvars *gvars)
 		}
 	}
 	gvars->gb[gvars->gi][i]='\0';
-	// printf("\n"); 
 } 
 
 // Utility function to check if this node is leaf 
@@ -346,17 +368,17 @@ struct MinHeapNode* buildHuffmanTree(char data[], int freq[], int size)
 { 
 	struct MinHeapNode *left, *right, *top; 
 
-	// Step 1: Create a min heap of capacity equal to size. Initially, there are modes equal to size. 
+	// Create a min heap of capacity equal to size. Initially, there are modes equal to size. 
 	struct MinHeap* minHeap = createAndBuildMinHeap(data, freq, size); 
 
 	// Iterate while size of heap doesn't become 1 
 	while (!isSizeOne(minHeap)) { 
 
-		// Step 2: Extract the two minimum freq items from min heap 
+		// Extract the two minimum freq items from min heap 
 		left = extractMin(minHeap); 
 		right = extractMin(minHeap); 
 
-		// Step 3: Create a new internal node with frequency equal to the sum of the two nodes frequencies. Make the two extracted node as 
+		// Create a new internal node with frequency equal to the sum of the two nodes frequencies. Make the two extracted node as 
 		// left and right children of this new node. Add this node to the min heap '$' is a special value for internal nodes, not used 
 		top = newNode('$', left->freq + right->freq); 
 		top->left = left; 
@@ -365,7 +387,7 @@ struct MinHeapNode* buildHuffmanTree(char data[], int freq[], int size)
 		insertMinHeap(minHeap, top); 
 	} 
 
-	// Step 4: The remaining node is the root node and the tree is complete. 
+	// The remaining node is the root node and the tree is complete. 
 	return extractMin(minHeap); 
 } 
 
@@ -384,7 +406,6 @@ void printCodes(struct MinHeapNode* root, int arr[], int top, struct globalvars 
 	} 
 	// If this is a leaf node, then it contains one of the input characters, print the character and its code from arr[] 
 	if (isLeaf(root)) {
-		// printf("%c: ",root->data);
 		gvars->gchar[gvars->gi]= root->data;
 		printArr(arr,top,gvars);
 		gvars->gi=gvars->gi+1;
@@ -423,6 +444,8 @@ void writeBit(int b,FILE *f, struct globalvars *gvars)
 	return;
 }
 
+
+// creates a substring of size length
 char *substring(char *string, int position, int length, char *pointer){
     int c;
     if (pointer == NULL)
@@ -437,6 +460,8 @@ char *substring(char *string, int position, int length, char *pointer){
     *(pointer+c) = '\0';
     return pointer;
 }
+
+//check file format
 
 int checkfileformat(char *s){
     int l = strlen(s);
