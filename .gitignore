@@ -4,6 +4,8 @@ Concurrent/RLE_Encoding/pzip
 Concurrent/RLE_Encoding/punzip
 Concurrent/RLE_Encoding/a.out
 
+Concurrent/RLE_Encoding/v1/r*
+
 Concurrent/HuffmanEncoding/sample*
 Concurrent/HuffmanEncoding/phuffzip
 Concurrent/HuffmanEncoding/phuffuzip

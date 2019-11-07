@@ -65,11 +65,11 @@ int main(int argc, char* argv[]){
         // Check file format and then proceed
         if(checkfileformat(argv[i])){
             l = strlen(argv[i]);
-            fp[i-1] = fopen(argv[i], "r");
+            fp[i-1] = fopen(argv[i], "r");  //we are reading files before creation of threads.
             
             sub = malloc(l-2);
-            substring(argv[i],0,l-3,sub);
-            strcat(sub, "pzip");
+            substring(argv[i],0,l-3,sub); //slicing the filename --> removing txt from filename
+            strcat(sub, "pzip");          // concating the pzip to string
             fout[i-1] = fopen(sub, "w");
             free(sub);
 
@@ -105,7 +105,7 @@ int main(int argc, char* argv[]){
 }
 
 
-void *RLEzip(void *param){
+void *RLEzip(void *param){                   // for compressing the files we are using RLE algorithm (Run Length Encoding)
     struct timeval start;
     struct timeval end;
     gettimeofday(&start, NULL);
@@ -114,15 +114,15 @@ void *RLEzip(void *param){
     int count = 0;
     char curr;
     char c;
-    if((curr = fgetc(iofiles->fin))!=EOF){
+    if((curr = fgetc(iofiles->fin))!=EOF){                                 
         count+=1;
         while((c = fgetc(iofiles->fin))!=EOF){
             if(curr==c){
                 count+=1;
             }else{
-                fwrite(&count, sizeof(int), 1, iofiles->fout);
-                fwrite(&curr, sizeof(char), 1, iofiles->fout);
-                curr = c;
+                fwrite(&count, sizeof(int), 1, iofiles->fout);     //we will write 4 byte integer (Run Length)
+                fwrite(&curr, sizeof(char), 1, iofiles->fout);     //wrtie 1 byte character
+                curr = c;                                          //thus a compressed file will consist of some number of 5 bytes
                 count = 1;
             }
         }

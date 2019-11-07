@@ -55,10 +55,10 @@ void *RLEzip(void *param){
 
     char *filename = (char *)param;
     int l = strlen(filename);
-    FILE *fin = fopen(filename, "r");
+    FILE *fin = fopen(filename, "r"); // we are reading the files parallely in each thread
     char *sub = malloc(l-2);
-    substring(filename,0,l-3,sub);
-    strcat(sub, "pzip");
+    substring(filename,0,l-3,sub); //slicing the filename --> removing txt extension from filename
+    strcat(sub, "pzip");          // concating the pzip extension to filename
     FILE *fout = fopen(sub, "w");
     free(sub);
     
@@ -71,9 +71,9 @@ void *RLEzip(void *param){
             if(curr==c){
                 count+=1;
             }else{
-                fwrite(&count, sizeof(int), 1, fout);
-                fwrite(&curr, sizeof(char), 1, fout);
-                curr = c;
+                fwrite(&count, sizeof(int), 1, fout);     //we will write 4 byte integer (Run Length)
+                fwrite(&curr, sizeof(char), 1, fout);     //wrtie 1 byte character
+                curr = c;                                 //thus a compressed file will consist of some number of 5 bytes
                 count = 1;
             }
         }

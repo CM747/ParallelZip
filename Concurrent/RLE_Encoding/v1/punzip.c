@@ -88,7 +88,9 @@ void *RLEunzip(void *param){
     int count;
     char *buf;
     while(fread(&count, sizeof(int), 1, iofiles->fin)>0){
-        fread(&curr, sizeof(char), 1, iofiles->fin);
+        if(fread(&curr, sizeof(char), 1, iofiles->fin)<=0){
+            exit(1);
+        }
         buf = (char *)malloc(count * sizeof(char));
         for(int j=1; j<=count; j++){
             buf[j-1] = curr;

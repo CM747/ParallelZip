@@ -75,7 +75,7 @@ int main(int argc, char *argv[]){
     }
 
     for(int i=1; i<argc; i++){
-        files = push(files, argv[i]);
+        files = push(files, argv[i]);// adding all files to a list
     }
 
     if(pthread_mutex_init(&lock, NULL) != 0){
@@ -111,10 +111,10 @@ void *RLEzip(void *param){
     while(filename){
         if(checkfileformat(filename)){
             l = strlen(filename);
-            fin = fopen(filename, "r");
+            fin = fopen(filename, "r");  //we are reading the files parallely in each thread
             sub = malloc(l-2);
-            substring(filename,0,l-3,sub);
-            strcat(sub, "pzip");
+            substring(filename,0,l-3,sub);//slicing the filename --> removing txt extension from filename
+            strcat(sub, "pzip");          // concating the pzip extension to filename
             fout = fopen(sub, "w");
             free(sub);
             
@@ -127,9 +127,9 @@ void *RLEzip(void *param){
                     if(curr==c){
                         count+=1;
                     }else{
-                        fwrite(&count, sizeof(int), 1, fout);
-                        fwrite(&curr, sizeof(char), 1, fout);
-                        curr = c;
+                        fwrite(&count, sizeof(int), 1, fout);     //we will write 4 byte integer (Run Length)
+                        fwrite(&curr, sizeof(char), 1, fout);     //wrtie 1 byte character
+                        curr = c;                                 //thus a compressed file will consist of some number of 5 bytes
                         count = 1;
                     }
                 }
@@ -142,7 +142,7 @@ void *RLEzip(void *param){
         }else{
             printf("Incorrect file format: %s\n", filename);
         }
-        filename = pop(&files);
+        filename = pop(&files);     //after zipping of one file it will pop the file and will start zipping next file waiting.
     }
 
     return NULL;
